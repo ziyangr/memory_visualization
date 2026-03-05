@@ -5,6 +5,84 @@ export interface Participant {
   relation: string;
 }
 
+export interface Persona {
+  name: string;
+  birth: string;
+  age: number;
+  nationality: string;
+  home_address: {
+    province: string;
+    city: string;
+    district: string;
+    street_name: string;
+    street_number: string;
+  };
+  birth_place: {
+    province: string;
+    city: string;
+    district?: string;
+  };
+  gender: string;
+  education: string;
+  job: string;
+  occupation: string;
+  workplace: {
+    province: string;
+    city: string;
+    district: string;
+    street_name: string;
+    street_number: string;
+  };
+  belief: string;
+  salary: number;
+  body: {
+    height: number;
+    weight: number;
+    BMI: number;
+  };
+  family: string;
+  personality: {
+    mbti: string;
+    traits: string[];
+  };
+  hobbies: string[];
+  favorite_foods: string[];
+  memory_date: string[];
+  aim: string[];
+  healthy_desc: string;
+  lifestyle_desc: string;
+  economic_desc: string;
+  work_desc: string;
+  experience_desc: string;
+  description: string;
+  relation: Array<Array<{
+    name: string;
+    relation: string;
+    "social circle": string;
+    gender: string;
+    age: number;
+    birth_date: string;
+    home_address: {
+      province: string;
+      city: string;
+      district: string;
+      street_name: string;
+      street_number: string;
+    };
+    birth_place: {
+      province: string;
+      city: string;
+      district?: string;
+    };
+    personality: string;
+    economic_level: string;
+    occupation: string;
+    organization: string;
+    nickname: string;
+    relation_description: string;
+  }>>;
+}
+
 export interface SubEvent {
   event_id: string;
   name: string;
@@ -100,6 +178,12 @@ export const CATEGORY_COLORS: Record<string, { main: string; light: string; dark
     light: '#A7F3D0',
     dark: '#0F5132',
     glow: 'rgba(25, 135, 84, 0.5)'
+  },
+  Persona: {
+    main: '#8B5CF6',
+    light: '#EDE9FE',
+    dark: '#6D28D9',
+    glow: 'rgba(139, 92, 246, 0.5)'
   }
 };
 
@@ -118,7 +202,8 @@ export const CATEGORY_ICONS: Record<string, string> = {
   Relationships: '👥',
   Health: '🏃',
   Education: '📚',
-  Finance: '💰'
+  Finance: '💰',
+  Persona: '👤'
 };
 
 export const LOCATION_ICONS: Record<LocationType, string> = {

@@ -279,32 +279,38 @@ export function filterNodes(
   function collectNodes(nodeId: string, parentVisible: boolean) {
     const node = nodes.get(nodeId);
     if (!node) return;
-    
-    const nodePassesFilters = passesFilters(node);
+
     const isExpanded = expandedNodes.has(nodeId) || !node.subevent || node.subevent.length === 0;
-    
+
     // Node is visible if it passes filters AND parent is visible (or it's a root)
+    const nodePassesFilters = passesFilters(node);
     const isVisible = nodePassesFilters && parentVisible;
-    
+
     if (isVisible) {
       visibleNodes.push(node);
       visibleNodeIds.add(nodeId);
     }
-    
+
     // Process children if this node is expanded
     if (node.decompose && node.subevent && isExpanded) {
       for (const subEvent of node.subevent) {
         const subId = String(subEvent.event_id);
-        // Only process children if parent is visible or we want to show partial trees
+        // Children visibility depends on parent visibility
         collectNodes(subId, isVisible);
       }
     }
   }
-  
-  // Start from root nodes (depth 0)
-  const rootNodes = Array.from(nodes.values()).filter(n => n.depth === 0);
-  for (const root of rootNodes) {
-    collectNodes(String(root.event_id), true);
+
+  // Start from root nodes (depth 0) - always include them initially
+  // If there's a persona node, start from it
+  const personaNode = nodes.get('persona-root');
+  if (personaNode) {
+    collectNodes('persona-root', true);
+  } else {
+    const rootNodes = Array.from(nodes.values()).filter(n => n.depth === 0);
+    for (const root of rootNodes) {
+      collectNodes(String(root.event_id), true);
+    }
   }
   
   // Collect edges between visible nodes

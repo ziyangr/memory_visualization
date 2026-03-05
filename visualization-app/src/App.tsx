@@ -123,6 +123,9 @@ function App() {
         <div className="legend-section">
           <span className="legend-title">Categories:</span>
           <span className="legend-item">
+            <span className="legend-color" style={{ backgroundColor: '#8B5CF6' }}></span> Persona
+          </span>
+          <span className="legend-item">
             <span className="legend-color" style={{ backgroundColor: '#2E86AB' }}></span> Career
           </span>
           <span className="legend-item">

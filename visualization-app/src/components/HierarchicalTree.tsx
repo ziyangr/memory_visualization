@@ -29,51 +29,61 @@ export const HierarchicalTree: React.FC<HierarchicalTreeProps> = ({ width, heigh
   // Build hierarchy from visible nodes
   const layoutData = useMemo(() => {
     if (visibleNodes.length === 0) return null;
-    
-    // Find root nodes (depth 0)
-    const rootNodes = visibleNodes.filter(n => n.depth === 0);
-    
+
     // Build a map for quick lookup
     const nodeMap = new Map(visibleNodes.map(n => [String(n.event_id), n]));
-    
-    // Build hierarchy structure
+
+    // Build hierarchy structure recursively
     function buildHierarchy(node: EventNode): any {
       const nodeId = String(node.event_id);
       const isExpanded = expandedNodes.has(nodeId);
+      const hasChildren = node.subevent && node.subevent.length > 0;
 
-      const children = node.subevent
-        ?.map(sub => nodeMap.get(String(sub.event_id)))
-        .filter(Boolean)
-        .filter(child => child && isExpanded) // Only include children if parent is expanded
-        .map(child => buildHierarchy(child!)) || [];
+      const children = hasChildren && isExpanded
+        ? node.subevent!
+            .map(sub => nodeMap.get(String(sub.event_id)))
+            .filter(Boolean)
+            .map(child => buildHierarchy(child!))
+        : undefined;
 
       return {
         ...node,
-        children: children.length > 0 ? children : undefined
+        children: children && children.length > 0 ? children : undefined
       };
     }
-    
-    // Create root with all root nodes as children
-    const rootData = {
-      event_id: 'root',
-      name: 'root',
-      description: '',
-      date: [''],
-      type: '',
-      participant: [],
-      location: '',
-      decompose: 1 as const,
-      depth: -1,
-      subeventCount: 0,
-      participantCount: 0,
-      duration: 0,
-      startDate: new Date('2025-01-01'),
-      endDate: new Date('2025-03-31'),
-      locationType: 'unknown' as const,
-      category: '',
-      children: rootNodes.map(r => buildHierarchy(r))
-    };
-    
+
+    // Find the persona root or regular roots
+    const personaNode = nodeMap.get('persona-root');
+
+    let rootData;
+
+    if (personaNode) {
+      // Persona exists - it's the root
+      rootData = buildHierarchy(personaNode);
+    } else {
+      // No persona - use regular depth 0 roots
+      const rootNodes = visibleNodes.filter(n => n.depth === 0);
+      rootData = {
+        event_id: 'virtual-root',
+        name: 'root',
+        description: '',
+        date: [''],
+        type: '',
+        participant: [],
+        location: '',
+        decompose: 1 as const,
+        depth: -1,
+        subeventCount: 0,
+        participantCount: 0,
+        duration: 0,
+        startDate: new Date('2025-01-01'),
+        endDate: new Date('2025-03-31'),
+        locationType: 'unknown' as const,
+        category: '',
+        children: rootNodes.map(r => buildHierarchy(r))
+      };
+    }
+
     const root = hierarchy(rootData);
     
     // Compute tree layout
@@ -103,6 +113,8 @@ export const HierarchicalTree: React.FC<HierarchicalTreeProps> = ({ width, heigh
   };
   
   const getNodeRadius = (node: EventNode) => {
+    // Persona root gets the largest size
+    if (node.event_id === 'persona-root') return 35;
     switch (node.depth) {
       case 0: return 25;
       case 1: return 18;
@@ -139,8 +151,25 @@ export const HierarchicalTree: React.FC<HierarchicalTreeProps> = ({ width, heigh
         onMouseLeave={() => setHoveredNode(null)}
         style={{ cursor: hasChildren ? 'pointer' : 'default' }}
       >
-        {/* Node shape */}
-        {node.data.depth === 0 && (
+        {/* Node shape - Persona root gets a special double circle */}
+        {node.data.event_id === 'persona-root' && (
+          <>
+            <circle
+              r={radius + 4}
+              fill={lightColor}
+              stroke={color}
+              strokeWidth={3}
+              filter={isHovered ? 'url(#glow)' : undefined}
+            />
+            <circle
+              r={radius - 4}
+              fill={color}
+              fillOpacity={0.2}
+              filter={isHovered ? 'url(#glow)' : undefined}
+            />
+          </>
+        )}
+        {node.data.depth === 0 && node.data.event_id !== 'persona-root' && (
           <circle
             r={radius}
             fill={lightColor}

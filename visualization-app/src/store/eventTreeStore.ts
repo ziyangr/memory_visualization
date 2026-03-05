@@ -1,7 +1,7 @@
 // src/store/eventTreeStore.ts
 
 import { create } from 'zustand';
-import { EventNode, GraphEdge, LocationType } from '../types/event';
+import { EventNode, GraphEdge, LocationType, Persona } from '../types/event';
 import { loadEventData, filterNodes, getEventStatistics } from '../utils/dataProcessing';
 
 export interface FilterState {
@@ -48,6 +48,9 @@ interface EventTreeState {
   availableCategories: string[];
   availableParticipants: string[];
   availableLocationTypes: LocationType[];
+
+  // Persona data
+  persona: Persona | null;
   
   // Actions
   actions: {
@@ -108,30 +111,59 @@ export const useEventTreeStore = create<EventTreeState>((set, get) => ({
   availableCategories: [],
   availableParticipants: [],
   availableLocationTypes: [],
+
+  persona: null,
   
   actions: {
     loadData: async (url: string) => {
       set({ isLoading: true, error: null });
-      
+
       try {
         const { nodes, edges, rootIds } = await loadEventData(url);
-        
-        // Compute available filter options
+
+        // Load persona data
+        let persona: Persona | null = null;
+        let personaRootId: string | null = null;
+
+        try {
+          const personaResponse = await fetch('/data/persona.json');
+          if (personaResponse.ok) {
+            persona = await personaResponse.json();
+            personaRootId = 'persona-root';
+          }
+        } catch (e) {
+          console.warn('Persona file not found or invalid, continuing without persona data');
+        }
+
+        // Compute available filter options - only keep specified categories
+        const ALLOWED_CATEGORIES = [
+          'Career',
+          'Education',
+          'Family&Living Situation',
+          'Finance',
+          'Health',
+          'Personal Life',
+          'Relationships',
+          'Persona'  // Include Persona category
+        ];
+
         const categories = Array.from(new Set(
           Array.from(nodes.values()).map(n => n.type)
-        )).sort();
-        
+        ))
+          .filter(cat => ALLOWED_CATEGORIES.includes(cat))
+          .sort();
+
         const participants = Array.from(new Set(
           Array.from(nodes.values()).flatMap(n => n.participant.map(p => p.name))
         )).sort();
-        
+
         const locationTypes = Array.from(new Set(
           Array.from(nodes.values()).map(n => n.locationType)
         )) as LocationType[];
-        
+
         // Get statistics
         const stats = getEventStatistics(nodes);
-        
+
         // Auto-expand first level
         const expandedNodes = new Set<string>();
         for (const node of nodes.values()) {
@@ -139,24 +171,76 @@ export const useEventTreeStore = create<EventTreeState>((set, get) => ({
             expandedNodes.add(String(node.event_id));
           }
         }
-        
+
+        // If persona exists, create a root node for the person
+        if (persona && personaRootId) {
+          // Create subevent references for all root events
+          const rootSubevents = rootIds.map(id => {
+            const rootNode = nodes.get(id);
+            return {
+              event_id: String(id),
+              name: rootNode?.name || 'Event',
+              date: rootNode?.date || [''],
+              type: rootNode?.type || 'Unknown',
+              description: rootNode?.description || '',
+              participant: rootNode?.participant || [],
+              location: rootNode?.location || '',
+              decompose: rootNode?.decompose || 0 as const
+            };
+          });
+
+          const personaNode: EventNode = {
+            event_id: personaRootId,
+            name: persona.name,
+            description: persona.description,
+            date: [persona.birth],
+            type: 'Persona',
+            participant: [{ name: persona.name, relation: '自己' }],
+            location: `${persona.home_address.province}${persona.home_address.city}${persona.home_address.district}`,
+            decompose: 1,
+            depth: 0,
+            subevent: rootSubevents,
+            subeventCount: rootIds.length,
+            participantCount: 1,
+            duration: 0,
+            startDate: new Date(persona.birth),
+            endDate: new Date(),
+            locationType: 'home' as LocationType,
+            category: 'Persona',
+            parentId: undefined
+          };
+
+          nodes.set(personaRootId, personaNode);
+
+          // Update parent references for all root events
+          rootIds.forEach(id => {
+            const rootNode = nodes.get(id);
+            if (rootNode) {
+              rootNode.parentId = personaRootId;
+              rootNode.depth = 1; // Change root events from depth 0 to 1
+              nodes.set(id, rootNode);
+            }
+          });
+        }
+
         set({
           nodes,
           edges,
-          rootIds,
+          rootIds: personaRootId ? [personaRootId] : rootIds,
           availableCategories: categories,
           availableParticipants: participants,
           availableLocationTypes: locationTypes,
           statistics: stats,
-          view: { ...DEFAULT_VIEW, expandedNodes },
+          persona,
+          view: { ...DEFAULT_VIEW, expandedNodes: personaRootId ? new Set([personaRootId]) : expandedNodes },
           isLoading: false
         });
-        
+
         get().actions.computeVisibleNodes();
       } catch (error) {
-        set({ 
+        set({
           error: error instanceof Error ? error.message : 'Failed to load data',
-          isLoading: false 
+          isLoading: false
         });
       }
     },
