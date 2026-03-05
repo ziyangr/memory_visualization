@@ -225,18 +225,23 @@ export function filterNodes(
    * Check if a node passes all filters
    */
   function passesFilters(node: EventNode): boolean {
+    // Persona node always passes filters (it's the fixed root)
+    if (node.event_id === 'persona-root') {
+      return true;
+    }
+
     // Time filter
     if (timeRange?.enabled) {
       if (node.endDate < timeRange.start || node.startDate > timeRange.end) {
         return false;
       }
     }
-    
+
     // Category filter
     if (categories.length > 0 && !categories.includes(node.type)) {
       return false;
     }
-    
+
     // Participant filter
     if (participants.length > 0) {
       const hasParticipant = node.participant.some(p =>
@@ -244,17 +249,25 @@ export function filterNodes(
       );
       if (!hasParticipant) return false;
     }
-    
+
     // Location type filter
     if (locationTypes.length > 0 && !locationTypes.includes(node.locationType)) {
       return false;
     }
-    
-    // Hierarchy level filter
-    if (hierarchyLevels.length > 0 && !hierarchyLevels.includes(node.depth)) {
-      return false;
+
+    // Hierarchy level filter - adjust for persona at level 0
+    // Level 0 = Persona (always shown), Level 1 = Main Events, Level 2 = Sub-Events, etc.
+    if (hierarchyLevels.length > 0) {
+      // Persona is always included if level 0 is selected
+      if (node.event_id === 'persona-root') {
+        return hierarchyLevels.includes(0);
+      }
+      // For other nodes, check if their depth is in the selected levels
+      if (!hierarchyLevels.includes(node.depth)) {
+        return false;
+      }
     }
-    
+
     // Search filter
     if (searchQuery) {
       const query = searchQuery.toLowerCase();
@@ -264,15 +277,15 @@ export function filterNodes(
         p.name.toLowerCase().includes(query)
       );
       const matchesLocation = node.location.toLowerCase().includes(query);
-      
+
       if (!matchesName && !matchesDesc && !matchesParticipant && !matchesLocation) {
         return false;
       }
     }
-    
+
     return true;
   }
-  
+
   /**
    * Recursively collect visible nodes
    */
@@ -301,12 +314,12 @@ export function filterNodes(
     }
   }
 
-  // Start from root nodes (depth 0) - always include them initially
-  // If there's a persona node, start from it
+  // Start from persona root node (always exists when persona is loaded)
   const personaNode = nodes.get('persona-root');
   if (personaNode) {
     collectNodes('persona-root', true);
   } else {
+    // Fallback to regular roots if no persona
     const rootNodes = Array.from(nodes.values()).filter(n => n.depth === 0);
     for (const root of rootNodes) {
       collectNodes(String(root.event_id), true);

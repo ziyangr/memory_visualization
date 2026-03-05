@@ -71,15 +71,15 @@ interface EventTreeState {
 }
 
 const DEFAULT_FILTERS: FilterState = {
-  timeRange: { 
-    start: '2025-01-01', 
-    end: '2025-03-31', 
-    enabled: false 
+  timeRange: {
+    start: '2025-01-01',
+    end: '2025-03-31',
+    enabled: false
   },
   categories: [],
   participants: [],
   locationTypes: [],
-  hierarchyLevels: [0, 1, 2],
+  hierarchyLevels: [0, 1, 2, 3],  // Include all levels by default
   searchQuery: ''
 };
 
