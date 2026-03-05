@@ -29,7 +29,7 @@ export const HierarchicalTree: React.FC<HierarchicalTreeProps> = ({ width, heigh
   // Store node positions (allows drag updates to trigger re-renders)
   const [nodePositions, setNodePositions] = useState<Map<string, { x: number; y: number }>>(new Map());
 
-  // Drag state
+  // Drag state for nodes
   const [dragState, setDragState] = useState<{
     draggingNodeId: string | null;
     draggedSubtree: Set<string>;
@@ -38,6 +38,21 @@ export const HierarchicalTree: React.FC<HierarchicalTreeProps> = ({ width, heigh
     draggingNodeId: null,
     draggedSubtree: new Set(),
     initialPositions: new Map()
+  });
+
+  // Canvas pan state
+  const [panState, setPanState] = useState<{
+    isPanning: boolean;
+    panX: number;
+    panY: number;
+    lastMouseX: number;
+    lastMouseY: number;
+  }>({
+    isPanning: false,
+    panX: 0,
+    panY: 0,
+    lastMouseX: 0,
+    lastMouseY: 0
   });
 
   const {
@@ -236,8 +251,8 @@ export const HierarchicalTree: React.FC<HierarchicalTreeProps> = ({ width, heigh
     if (!svg) return;
 
     const rect = svg.getBoundingClientRect();
-    const mouseX = event.clientX - rect.left;
-    const mouseY = event.clientY - rect.top;
+    const mouseX = event.clientX - rect.left - panState.panX;
+    const mouseY = event.clientY - rect.top - panState.panY;
 
     const baseInitialPos = dragState.initialPositions.get(dragState.draggingNodeId);
     if (!baseInitialPos) return;
@@ -267,10 +282,74 @@ export const HierarchicalTree: React.FC<HierarchicalTreeProps> = ({ width, heigh
     });
   };
 
+  // Canvas panning handlers
+  const handleCanvasPanStart = (event: React.MouseEvent) => {
+    // Middle click (button 1) - always pan
+    if (event.button === 1) {
+      event.preventDefault();
+      setPanState(prev => ({
+        ...prev,
+        isPanning: true,
+        lastMouseX: event.clientX,
+        lastMouseY: event.clientY
+      }));
+      return;
+    }
+
+    // Left click (button 0) on empty area - pan only if not clicking on a node
+    // This is handled by the node's stopPropagation, so if we get here, it's an empty area click
+    if (event.button === 0 && !dragState.draggingNodeId) {
+      setPanState(prev => ({
+        ...prev,
+        isPanning: true,
+        lastMouseX: event.clientX,
+        lastMouseY: event.clientY
+      }));
+    }
+  };
+
+  const handleCanvasPanMove = (event: React.MouseEvent) => {
+    if (!panState.isPanning) return;
+
+    const deltaX = event.clientX - panState.lastMouseX;
+    const deltaY = event.clientY - panState.lastMouseY;
+
+    setPanState(prev => ({
+      ...prev,
+      panX: prev.panX + deltaX,
+      panY: prev.panY + deltaY,
+      lastMouseX: event.clientX,
+      lastMouseY: event.clientY
+    }));
+  };
+
+  const handleCanvasPanEnd = () => {
+    setPanState(prev => ({
+      ...prev,
+      isPanning: false
+    }));
+  };
+
+  // Reset pan to center
+  const resetPan = () => {
+    setPanState(prev => ({
+      ...prev,
+      panX: 0,
+      panY: 0
+    }));
+  };
+
+  // Handle double click to reset pan
+  const handleSvgDoubleClick = () => {
+    resetPan();
+  };
+
   // Handle SVG mouse move/end for drag
   const handleSvgMouseMove = (event: React.MouseEvent) => {
     if (dragState.draggingNodeId) {
       handleDragMove(event);
+    } else if (panState.isPanning) {
+      handleCanvasPanMove(event);
     }
   };
 
@@ -278,6 +357,14 @@ export const HierarchicalTree: React.FC<HierarchicalTreeProps> = ({ width, heigh
     if (dragState.draggingNodeId) {
       handleDragEnd();
     }
+    if (panState.isPanning) {
+      handleCanvasPanEnd();
+    }
+  };
+
+  // Handle middle click to prevent default browser behavior
+  const handleSvgContextMenu = (event: React.MouseEvent) => {
+    event.preventDefault();
   };
 
   if (!layoutData || visibleNodes.length === 0) {
@@ -508,9 +595,13 @@ export const HierarchicalTree: React.FC<HierarchicalTreeProps> = ({ width, heigh
       width={width}
       height={height}
       className="hierarchical-tree"
+      onMouseDown={handleCanvasPanStart}
       onMouseMove={handleSvgMouseMove}
       onMouseUp={handleSvgMouseUp}
       onMouseLeave={handleSvgMouseUp}
+      onContextMenu={handleSvgContextMenu}
+      onDoubleClick={handleSvgDoubleClick}
+      style={{ cursor: panState.isPanning ? 'grabbing' : 'default' }}
     >
       <defs>
         {/* Glow filter for hover effect */}
@@ -539,11 +630,14 @@ export const HierarchicalTree: React.FC<HierarchicalTreeProps> = ({ width, heigh
         </marker>
       </defs>
 
-      {/* Render edges first (so they appear behind nodes) */}
-      {simulationLinks.map(renderEdge)}
+      {/* Apply pan transform to all content */}
+      <g transform={`translate(${panState.panX}, ${panState.panY})`}>
+        {/* Render edges first (so they appear behind nodes) */}
+        {simulationLinks.map(renderEdge)}
 
-      {/* Render nodes */}
-      {simulationNodes.map(renderNode)}
+        {/* Render nodes */}
+        {simulationNodes.map(renderNode)}
+      </g>
     </svg>
   );
 };
