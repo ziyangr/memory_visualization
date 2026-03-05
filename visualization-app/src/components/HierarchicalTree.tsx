@@ -85,13 +85,20 @@ export const HierarchicalTree: React.FC<HierarchicalTreeProps> = ({ width, heigh
     }
 
     const root = hierarchy(rootData);
-    
+
     // Compute tree layout
     const treeLayout = tree<any>()
       .size([width - 300, height - 100])
       .nodeSize([40, 100]); // [nodeWidth, levelHeight]
-    
-    return treeLayout(root);
+
+    const layout = treeLayout(root);
+
+    // Calculate offset to center the root node horizontally
+    const rootX = layout.x!;
+    const offsetX = width / 2 - rootX;
+    const offsetY = 80; // Small offset from top for better visibility
+
+    return { layout, offsetX, offsetY };
   }, [visibleNodes, expandedNodes, width, height]);
   
   if (!layoutData || visibleNodes.length === 0) {
@@ -101,6 +108,8 @@ export const HierarchicalTree: React.FC<HierarchicalTreeProps> = ({ width, heigh
       </div>
     );
   }
+
+  const { layout, offsetX, offsetY } = layoutData;
   
   const getNodeColor = (node: EventNode) => {
     const colors = CATEGORY_COLORS[node.type] || CATEGORY_COLORS['Personal Life'];
@@ -333,12 +342,12 @@ export const HierarchicalTree: React.FC<HierarchicalTreeProps> = ({ width, heigh
         </marker>
       </defs>
       
-      <g transform="translate(250, 50)">
+      <g transform={`translate(${offsetX}, ${offsetY})`}>
         {/* Render edges first (so they appear behind nodes) */}
-        {layoutData.links().map(renderEdge)}
-        
+        {layout.links().map(renderEdge)}
+
         {/* Render nodes */}
-        {layoutData.descendants().map(renderNode)}
+        {layout.descendants().map(renderNode)}
       </g>
     </svg>
   );
