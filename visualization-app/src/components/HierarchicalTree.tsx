@@ -26,6 +26,20 @@ export const HierarchicalTree: React.FC<HierarchicalTreeProps> = ({ width, heigh
   const svgRef = useRef<SVGSVGElement>(null);
   const [hoveredNode, setHoveredNode] = useState<string | null>(null);
 
+  // Store node positions (allows drag updates to trigger re-renders)
+  const [nodePositions, setNodePositions] = useState<Map<string, { x: number; y: number }>>(new Map());
+
+  // Drag state
+  const [dragState, setDragState] = useState<{
+    draggingNodeId: string | null;
+    draggedSubtree: Set<string>;
+    initialPositions: Map<string, { x: number; y: number }>;
+  }>({
+    draggingNodeId: null,
+    draggedSubtree: new Set(),
+    initialPositions: new Map()
+  });
+
   const {
     visibleNodes,
     view,
@@ -152,13 +166,120 @@ export const HierarchicalTree: React.FC<HierarchicalTreeProps> = ({ width, heigh
       positions.set(node.id, { x: node.x!, y: node.y! });
     });
 
+    // Initialize positions if not already set
+    setNodePositions(prev => {
+      const newPositions = new Map(prev);
+      positions.forEach((pos, id) => {
+        if (!newPositions.has(id)) {
+          newPositions.set(id, pos);
+        }
+      });
+      return newPositions;
+    });
+
     return {
       nodes: simulationNodes,
       links: simulationLinks,
       positions
     };
   }, [visibleNodes, expandedNodes, width, height]);
-  
+
+  // Get all descendant node IDs for a given node
+  const getSubtreeNodes = (nodeId: string, nodes: SimulationNode[]): Set<string> => {
+    const subtree = new Set<string>();
+    const nodeMap = new Map(nodes.map(n => [n.id, n]));
+
+    function collectDescendants(id: string) {
+      const node = nodeMap.get(id);
+      if (!node || !node.children) return;
+
+      for (const child of node.children) {
+        subtree.add(child.id);
+        collectDescendants(child.id);
+      }
+    }
+
+    collectDescendants(nodeId);
+    return subtree;
+  };
+
+  // Handle drag start
+  const handleDragStart = (nodeId: string, event: React.MouseEvent) => {
+    event.stopPropagation();
+    if (!layoutData) return;
+
+    const subtree = getSubtreeNodes(nodeId, layoutData.nodes);
+    const initialPositions = new Map<string, { x: number; y: number }>();
+
+    // Store initial positions for all nodes in the subtree
+    layoutData.nodes.forEach(n => {
+      if (n.id === nodeId || subtree.has(n.id)) {
+        const pos = nodePositions.get(n.id) || layoutData.positions.get(n.id);
+        if (pos) {
+          initialPositions.set(n.id, pos);
+        }
+      }
+    });
+
+    setDragState({
+      draggingNodeId: nodeId,
+      draggedSubtree: subtree,
+      initialPositions
+    });
+  };
+
+  // Handle drag move
+  const handleDragMove = (event: React.MouseEvent) => {
+    if (!dragState.draggingNodeId || !layoutData) return;
+
+    const svg = svgRef.current;
+    if (!svg) return;
+
+    const rect = svg.getBoundingClientRect();
+    const mouseX = event.clientX - rect.left;
+    const mouseY = event.clientY - rect.top;
+
+    const baseInitialPos = dragState.initialPositions.get(dragState.draggingNodeId);
+    if (!baseInitialPos) return;
+
+    // Calculate the delta from the initial position
+    const deltaX = mouseX - baseInitialPos.x;
+    const deltaY = mouseY - baseInitialPos.y;
+
+    // Update positions for all nodes in the subtree
+    const newPositions = new Map(nodePositions);
+    dragState.initialPositions.forEach((initialPos, nodeId) => {
+      newPositions.set(nodeId, {
+        x: initialPos.x + deltaX,
+        y: initialPos.y + deltaY
+      });
+    });
+
+    setNodePositions(newPositions);
+  };
+
+  // Handle drag end
+  const handleDragEnd = () => {
+    setDragState({
+      draggingNodeId: null,
+      draggedSubtree: new Set(),
+      initialPositions: new Map()
+    });
+  };
+
+  // Handle SVG mouse move/end for drag
+  const handleSvgMouseMove = (event: React.MouseEvent) => {
+    if (dragState.draggingNodeId) {
+      handleDragMove(event);
+    }
+  };
+
+  const handleSvgMouseUp = () => {
+    if (dragState.draggingNodeId) {
+      handleDragEnd();
+    }
+  };
+
   if (!layoutData || visibleNodes.length === 0) {
     return (
       <div className="empty-state">
@@ -195,18 +316,27 @@ export const HierarchicalTree: React.FC<HierarchicalTreeProps> = ({ width, heigh
     const isHovered = hoveredNode === nodeId;
     const isExpanded = expandedNodes.has(nodeId);
     const hasChildren = simNode.data.subevent && simNode.data.subevent.length > 0;
+    const isDragging = dragState.draggingNodeId === nodeId;
+    const isInDraggedSubtree = dragState.draggedSubtree.has(nodeId);
 
-    const x = simNode.x!;
-    const y = simNode.y!;
+    // Use stored position or fallback to simulation position
+    const pos = nodePositions.get(nodeId);
+    const x = pos?.x ?? simNode.x!;
+    const y = pos?.y ?? simNode.y!;
+
     const radius = getNodeRadius(simNode.data);
     const color = getNodeColor(simNode.data);
     const lightColor = getNodeLightColor(simNode.data);
-    
+
     return (
       <g
         key={nodeId}
         className="tree-node"
         transform={`translate(${x}, ${y})`}
+        onMouseDown={(e) => {
+          e.stopPropagation();
+          handleDragStart(nodeId, e);
+        }}
         onClick={(e) => {
           e.stopPropagation();
           if (hasChildren) {
@@ -216,7 +346,9 @@ export const HierarchicalTree: React.FC<HierarchicalTreeProps> = ({ width, heigh
         }}
         onMouseEnter={() => setHoveredNode(nodeId)}
         onMouseLeave={() => setHoveredNode(null)}
-        style={{ cursor: hasChildren ? 'pointer' : 'default' }}
+        style={{
+          cursor: isDragging || isInDraggedSubtree ? 'grabbing' : hasChildren ? 'pointer' : 'grab'
+        }}
       >
         {/* Node shape - Persona root gets a special double circle */}
         {simNode.data.event_id === 'persona-root' && (
@@ -339,10 +471,14 @@ export const HierarchicalTree: React.FC<HierarchicalTreeProps> = ({ width, heigh
   };
   
   const renderEdge = (link: any, index: number) => {
-    const sourceX = link.source.x!;
-    const sourceY = link.source.y!;
-    const targetX = link.target.x!;
-    const targetY = link.target.y!;
+    // Use stored positions for real-time edge following during drag
+    const sourcePos = nodePositions.get(link.source.id) || { x: link.source.x!, y: link.source.y! };
+    const targetPos = nodePositions.get(link.target.id) || { x: link.target.x!, y: link.target.y! };
+
+    const sourceX = sourcePos.x;
+    const sourceY = sourcePos.y;
+    const targetX = targetPos.x;
+    const targetY = targetPos.y;
 
     // Create curved path
     const pathData = `M${sourceX},${sourceY}
@@ -365,13 +501,16 @@ export const HierarchicalTree: React.FC<HierarchicalTreeProps> = ({ width, heigh
       />
     );
   };
-  
+
   return (
     <svg
       ref={svgRef}
       width={width}
       height={height}
       className="hierarchical-tree"
+      onMouseMove={handleSvgMouseMove}
+      onMouseUp={handleSvgMouseUp}
+      onMouseLeave={handleSvgMouseUp}
     >
       <defs>
         {/* Glow filter for hover effect */}
