@@ -6,7 +6,7 @@ import { useEventTreeStore } from '../store/eventTreeStore';
 export const Header: React.FC = () => {
   const { statistics, view, actions } = useEventTreeStore();
   const { viewMode, showLabels, showEdges } = view;
-  
+
   return (
     <header className="app-header">
       <div className="header-left">
@@ -17,7 +17,7 @@ export const Header: React.FC = () => {
           Personal Knowledge Graph Visualization
         </span>
       </div>
-      
+
       <div className="header-center">
         {/* View Mode Toggle */}
         <div className="view-toggle">
@@ -29,7 +29,7 @@ export const Header: React.FC = () => {
             🌳 Tree
           </button>
         </div>
-        
+
         {/* Display Options */}
         <div className="display-options">
           <button
@@ -47,7 +47,7 @@ export const Header: React.FC = () => {
             🔗 Edges
           </button>
         </div>
-        
+
         {/* Expand/Collapse Controls */}
         <div className="expand-controls">
           <button
@@ -80,7 +80,7 @@ export const Header: React.FC = () => {
           </button>
         </div>
       </div>
-      
+
       <div className="header-right">
         {/* Statistics Summary */}
         {statistics && (

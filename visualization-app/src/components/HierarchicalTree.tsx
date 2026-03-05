@@ -29,6 +29,9 @@ export const HierarchicalTree: React.FC<HierarchicalTreeProps> = ({ width, heigh
   // Store node positions (allows drag updates to trigger re-renders)
   const [nodePositions, setNodePositions] = useState<Map<string, { x: number; y: number }>>(new Map());
 
+  // Get daily events from store for link indicators
+  const { dailyEvents } = useEventTreeStore();
+
   // Drag state for nodes
   const [dragState, setDragState] = useState<{
     draggingNodeId: string | null;
@@ -344,6 +347,21 @@ export const HierarchicalTree: React.FC<HierarchicalTreeProps> = ({ width, heigh
     resetPan();
   };
 
+  // Check if a node is linked to daily events
+  const getLinkedDailyEvents = (nodeId: string) => {
+    return dailyEvents.filter(event =>
+      event.atomic_id?.includes(nodeId)
+    );
+  };
+
+  const hasDailyEvents = (nodeId: string) => {
+    return getLinkedDailyEvents(nodeId).length > 0;
+  };
+
+  const getDailyEventCount = (nodeId: string) => {
+    return getLinkedDailyEvents(nodeId).length;
+  };
+
   // Handle SVG mouse move/end for drag
   const handleSvgMouseMove = (event: React.MouseEvent) => {
     if (dragState.draggingNodeId) {
@@ -509,6 +527,37 @@ export const HierarchicalTree: React.FC<HierarchicalTreeProps> = ({ width, heigh
               fill={color}
             >
               {isExpanded ? '−' : '+'}
+            </text>
+          </g>
+        )}
+
+        {/* Daily event link indicator */}
+        {hasDailyEvents(nodeId) && (
+          <g transform={`translate(${-radius - 8}, ${-radius - 8})`}>
+            <circle r="10" fill="#F18F01" stroke="#fff" strokeWidth={1} />
+            <text
+              textAnchor="middle"
+              dominantBaseline="central"
+              fontSize={12}
+              fill="#fff"
+            >
+              📔
+            </text>
+          </g>
+        )}
+
+        {/* Daily event count badge */}
+        {getDailyEventCount(nodeId) > 1 && (
+          <g transform={`translate(${radius + 8}, ${-radius - 8})`}>
+            <circle r="10" fill="#F18F01" stroke="#fff" strokeWidth={1} />
+            <text
+              textAnchor="middle"
+              dominantBaseline="central"
+              fontSize={10}
+              fontWeight="bold"
+              fill="#fff"
+            >
+              {getDailyEventCount(nodeId)}
             </text>
           </g>
         )}

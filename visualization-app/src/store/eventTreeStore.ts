@@ -4,6 +4,17 @@ import { create } from 'zustand';
 import { EventNode, GraphEdge, LocationType, Persona } from '../types/event';
 import { loadEventData, filterNodes, getEventStatistics } from '../utils/dataProcessing';
 
+export interface DailyEvent {
+  event_id: string;
+  name: string;
+  date: string[];
+  type: string;
+  description: string;
+  participant: { name: string; relation: string }[];
+  location: string;
+  atomic_id: string[];
+}
+
 export interface FilterState {
   timeRange: {
     start: string;
@@ -51,10 +62,16 @@ interface EventTreeState {
 
   // Persona data
   persona: Persona | null;
+
+  // Daily events and atomic index
+  dailyEvents: DailyEvent[];
+  atomicEventMap: Map<string, { event_id: string; name: string; parentId?: string }>;
   
   // Actions
   actions: {
     loadData: (url: string) => Promise<void>;
+    loadDailyEvents: () => Promise<void>;
+    buildAtomicEventMap: () => void;
     toggleNode: (nodeId: string) => void;
     expandAll: () => void;
     collapseAll: () => void;
@@ -113,6 +130,9 @@ export const useEventTreeStore = create<EventTreeState>((set, get) => ({
   availableLocationTypes: [],
 
   persona: null,
+
+  dailyEvents: [],
+  atomicEventMap: new Map(),
   
   actions: {
     loadData: async (url: string) => {
@@ -236,6 +256,9 @@ export const useEventTreeStore = create<EventTreeState>((set, get) => ({
           isLoading: false
         });
 
+        // Load daily events and build atomic index
+        get().actions.loadDailyEvents();
+        get().actions.buildAtomicEventMap();
         get().actions.computeVisibleNodes();
       } catch (error) {
         set({
@@ -243,6 +266,39 @@ export const useEventTreeStore = create<EventTreeState>((set, get) => ({
           isLoading: false
         });
       }
+    },
+
+    loadDailyEvents: async () => {
+      try {
+        const response = await fetch('/data/daily_event_3months.json');
+        if (response.ok) {
+          const dailyEvents = await response.json();
+          set({ dailyEvents });
+        }
+      } catch (error) {
+        console.error('Failed to load daily events:', error);
+      }
+    },
+
+    buildAtomicEventMap: () => {
+      const { nodes } = get();
+      const atomicEventMap = new Map();
+
+      // Build index of all atomic events (sub-events) for linking
+      nodes.forEach(node => {
+        // Index sub-events
+        if (node.subevent) {
+          node.subevent.forEach(sub => {
+            atomicEventMap.set(String(sub.event_id), {
+              event_id: String(sub.event_id),
+              name: sub.name,
+              parentId: String(node.event_id)
+            });
+          });
+        }
+      });
+
+      set({ atomicEventMap });
     },
     
     toggleNode: (nodeId: string) => {

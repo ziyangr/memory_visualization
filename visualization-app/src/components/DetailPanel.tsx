@@ -6,7 +6,7 @@ import { CATEGORY_ICONS, LOCATION_ICONS, CATEGORY_COLORS } from '../types/event'
 import { format } from 'date-fns';
 
 export const DetailPanel: React.FC = () => {
-  const { view, nodes, actions, persona } = useEventTreeStore();
+  const { view, nodes, actions, persona, dailyEvents } = useEventTreeStore();
   const { selectedNode } = view;
 
   if (!selectedNode) {
@@ -389,7 +389,7 @@ export const DetailPanel: React.FC = () => {
         {node.parentId && (
           <div className="info-section">
             <h3>⬆️ Parent Event</h3>
-            <button 
+            <button
               className="btn-link"
               onClick={() => actions.selectNode(node.parentId!)}
             >
@@ -397,7 +397,33 @@ export const DetailPanel: React.FC = () => {
             </button>
           </div>
         )}
-        
+
+        {/* Related Daily Events */}
+        {(() => {
+          const relatedDailyEvents = dailyEvents.filter(e =>
+            e.atomic_id?.includes(String(node.event_id))
+          );
+
+          if (relatedDailyEvents.length === 0) return null;
+
+          return (
+            <div className="info-section">
+              <h3>📔 Related Daily Events ({relatedDailyEvents.length})</h3>
+              <div className="daily-events-list">
+                {relatedDailyEvents.map((event, idx) => (
+                  <div key={idx} className="daily-event-item">
+                    <div className="daily-event-date">
+                      {format(new Date(event.date[0].split('至')[0].trim()), 'MMM d, yyyy')}
+                    </div>
+                    <div className="daily-event-name">{event.name}</div>
+                    <div className="daily-event-type">{event.type}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          );
+        })()}
+
         {/* Statistics */}
         <div className="info-section">
           <h3>📊 Statistics</h3>
