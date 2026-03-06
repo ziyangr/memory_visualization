@@ -80,9 +80,6 @@ function App() {
         {/* Left Sidebar - Filters */}
         <aside className="sidebar sidebar-left">
           <div className="sidebar-content">
-            <TimeFilter />
-            <AttributeFilter />
-
             {/* View Mode Toggle */}
             <div className="view-mode-toggle">
               <button
@@ -98,6 +95,9 @@ function App() {
                 📔 Daily Diary
               </button>
             </div>
+
+            <TimeFilter />
+            <AttributeFilter />
           </div>
         </aside>
 
